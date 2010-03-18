@@ -1,4 +1,4 @@
-sfrom wikia_db import WikiaDB
+from wikia_db import WikiaDB
 
 from BeautifulSoup import BeautifulSoup
 
