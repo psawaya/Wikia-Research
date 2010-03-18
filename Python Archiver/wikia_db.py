@@ -57,6 +57,9 @@ class WikiaDB:
     
     @staticmethod
     def parseFilesizeString(filesize_str):
-        mult_factor = {'K' : 1000, 'M' : 1000000, 'G' : 1000000000}[filesize_str[-1].upper()]
+        try:
+            mult_factor = {'K' : 1000, 'M' : 1000000, 'G' : 1000000000}[filesize_str[-1].upper()]
+        except KeyError:
+            mult_factor = 1
         
         return float(filesize_str[:-1]) * mult_factor
