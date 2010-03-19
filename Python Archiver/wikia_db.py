@@ -42,7 +42,7 @@ class WikiaDB:
     def recordArchiveFile(self,wiki_name,url,downloaded,last_modified,filesize_str):
         c = self.db.cursor()
         
-        print "last_modified: %i" % last_modified
+        # print "last_modified: %i" % last_modified
         
         c.execute("""INSERT INTO wikia_files (wiki_name,url,downloaded,last_modified,filesize)
             VALUES ('%s','%s',%i,'%s',%i)"""  % (wiki_name,url,int(downloaded), datetime.fromtimestamp(last_modified),self.parseFilesizeString(filesize_str)))

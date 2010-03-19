@@ -11,6 +11,8 @@ from time import sleep
 DOWNLOAD_FILES = True
 DOWNLOAD_DIR = "" # "/nas/wikia_dumps/"
 
+EMAIL_THRESHOLD = 50 * 1000 * 1000 #email me every 50 megs
+
 def increaseSleepTime(sleep_time):
     return 0 #right now, don't bother with sleeping
 
@@ -19,6 +21,9 @@ class WikiaScraper:
         self.json_docs = []
         
         self.db = WikiaDB()
+        
+        self.downloaded_already = 0
+        self.downloaded_since_email = 0
     
     def scrapeIndex(self):
         self.scrapePage("http://wiki-stats.wikia.com/",0)
@@ -53,15 +58,22 @@ class WikiaScraper:
 
             json_files_txt.close()
             
-            print "time to check db for %s! " % (url+archive_name) 
+            # print "time to check db for %s! " % (url+archive_name) 
             
             if self.db.fileNotArchivedOrOld(url+archive_name,timestamp):
-                print "time to archive!"
+                # print "time to archive!"
                 wiki_name = url.split("/")[-2]
                 
                 self.archiveFile(url+archive_name,wiki_name)
                 
                 self.db.recordArchiveFile(wiki_name,url+archive_name,DOWNLOAD_FILES,timestamp,file_size)
+                
+                self.downloaded_already += self.db.parseFilesizeString(file_size)
+                self.downloaded_since_email += self.db.parseFilesizeString(file_size)
+                
+                if self.downloaded_since_email >= EMAIL_THRESHOLD:
+                    self.downloaded_since_email = 0
+                    self.emailPaul(wiki_name)
             
         else:        
             contents = []
@@ -78,7 +90,7 @@ class WikiaScraper:
             self.db.recordDirAsScraped(url)
             
     def scrapeJSON(self,url,filename):
-        self.json_docs.append(url)
+        # self.json_docs.append(url)
 
         # print ("json file = %s" % (url+filename))
         json_doc = urllib2.urlopen(url + filename).read()
@@ -111,10 +123,24 @@ class WikiaScraper:
         
         return (url, archive_name, json_data[archive_name]['timestamp'], True)
 
+    def emailPaul(self,last_download):
+        SENDMAIL = "/usr/sbin/sendmail" # sendmail location
+        p = os.popen("%s -t" % SENDMAIL, "w")
+        p.write("To: me@paulsawaya.com\n")
+        p.write("Subject: downloaded %iK\n" % float(self.downloaded_already/1000))
+        p.write("Last downloaded: %s\n" % last_download) # blank line separating headers from body
+        sts = p.close()
+        if sts != 0:
+            pass
+            # print "Sendmail exit status", sts
+        self.json_docs = []
+
     def archiveFile(self,url,filename):
         if DOWNLOAD_FILES:
-            print "About to archive file %s" % url
+            # print "About to archive file %s" % url
             os.system ("wget %s -O %s.xml.gz" % (url,DOWNLOAD_DIR + filename))
+            
+            sleep(20) #sleep 20 seconds
             
         
 if __name__ == "__main__":
