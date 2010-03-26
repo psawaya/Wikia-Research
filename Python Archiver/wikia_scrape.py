@@ -8,10 +8,16 @@ import urllib2
 import os
 from time import sleep
 
+from httplib import BadStatusLine
+
 DOWNLOAD_FILES = True
 DOWNLOAD_DIR = "" # "/nas/wikia_dumps/"
 
-EMAIL_THRESHOLD = 50 * 1000 * 1000 #email me every 50 megs
+EMAIL_THRESHOLD = 5 #50 * 1000 * 1000 #email me every 50 megs
+
+SLEEP_BETWEEN_DLS = 0 #20 
+
+PAULS_PHONE_NUMBER = 1234561234
 
 def increaseSleepTime(sleep_time):
     return 0 #right now, don't bother with sleeping
@@ -28,6 +34,24 @@ class WikiaScraper:
     def scrapeIndex(self):
         self.scrapePage("http://wiki-stats.wikia.com/",0)
         
+    @staticmethod
+    def fetchPage(url,nth = 0):
+        try:
+            retval = urllib2.urlopen(url)
+        except BadStatusLine:
+            
+            print "badStatusLine"
+            
+            emailPaul("Bad status, waiting two minutes", "URL = " + url)
+            
+            if nth == 0:
+                emailPaul("Bad status, waiting two minutes", "URL = " + url, sms=True)
+            
+            sleep(60 * 2) #Wait two minutes
+            return fetchPage(url,nth = nth+1) #Try again
+        
+        return retval
+        
     def scrapePage(self,url,wait_time):
         
         if self.db.dirAlreadyVisited(url): return
@@ -36,7 +60,7 @@ class WikiaScraper:
         
         sleep(wait_time)
         
-        page = urllib2.urlopen(url)
+        page = self.fetchPage(url)#urllib2.urlopen(url)
         soup = BeautifulSoup(page)
 
         #Check if this is an end page (that describes a wikia wiki, and contains a .json)
@@ -73,7 +97,9 @@ class WikiaScraper:
                 
                 if self.downloaded_since_email >= EMAIL_THRESHOLD:
                     self.downloaded_since_email = 0
-                    self.emailPaul(wiki_name)
+                    # self.emailPaul(wiki_name)
+                    self.emailPaul("downloaded %iK\n" % float(self.downloaded_already/1000), "Last downloaded: " + wiki_name)
+                    self.json_docs = []
             
         else:        
             contents = []
@@ -93,7 +119,8 @@ class WikiaScraper:
         # self.json_docs.append(url)
 
         # print ("json file = %s" % (url+filename))
-        json_doc = urllib2.urlopen(url + filename).read()
+        json_doc = self.fetchPage(url+filename).read()
+        #urllib2.urlopen(url + filename).read()
         
         # print "json_doc = %s " % json_doc
         
@@ -123,24 +150,39 @@ class WikiaScraper:
         
         return (url, archive_name, json_data[archive_name]['timestamp'], True)
 
-    def emailPaul(self,last_download):
+    # def emailPaul(self,last_download):
+    #     SENDMAIL = "/usr/sbin/sendmail" # sendmail location
+    #     p = os.popen("%s -t" % SENDMAIL, "w")
+    #     p.write("To: me@paulsawaya.com\n")
+    #     p.write("Subject: downloaded %iK\n" % float(self.downloaded_already/1000))
+    #     p.write("Last downloaded: %s\n" % last_download) # blank line separating headers from body
+    #     sts = p.close()
+    #     if sts != 0:
+    #         pass
+    #         # print "Sendmail exit status", sts
+    #     # self.json_docs = []
+        
+    def emailPaul(self,subject,message_body,sms=False):
         SENDMAIL = "/usr/sbin/sendmail" # sendmail location
         p = os.popen("%s -t" % SENDMAIL, "w")
-        p.write("To: me@paulsawaya.com\n")
-        p.write("Subject: downloaded %iK\n" % float(self.downloaded_already/1000))
-        p.write("Last downloaded: %s\n" % last_download) # blank line separating headers from body
+        
+        if sms:
+            p.write("To: %s@messaging.sprintpcs.com\n" % PAULS_PHONE_NUMBER)
+        else:
+            p.write("To: me@paulsawaya.com\n")
+
+        p.write("Subject: %s\n" % subject)#downloaded %iK\n" % float(self.downloaded_already/1000))
+        p.write(message_body + "\n") #% last_download) # blank line separating headers from body
         sts = p.close()
         if sts != 0:
             pass
-            # print "Sendmail exit status", sts
-        self.json_docs = []
-
+        
     def archiveFile(self,url,filename):
         if DOWNLOAD_FILES:
             # print "About to archive file %s" % url
             os.system ("wget %s -O %s.xml.gz" % (url,DOWNLOAD_DIR + filename))
             
-            sleep(20) #sleep 20 seconds
+            sleep(SLEEP_BETWEEN_DLS) #sleep 20 seconds
             
         
 if __name__ == "__main__":
